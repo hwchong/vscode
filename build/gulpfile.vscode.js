@@ -81,6 +81,7 @@ const vscodeResources = [
 	'out-build/vs/code/electron-browser/sharedProcess/sharedProcess.js',
 	'out-build/vs/code/electron-browser/issue/issueReporter.js',
 	'out-build/vs/code/electron-browser/processExplorer/processExplorer.js',
+	'out-build/vs/platform/auth/common/auth.css',
 	'!**/test/**'
 ];
 
@@ -120,9 +121,9 @@ gulp.task(minifyVSCodeTask);
  * @return {Object} A map of paths to checksums.
  */
 function computeChecksums(out, filenames) {
-	var result = {};
+	let result = {};
 	filenames.forEach(function (filename) {
-		var fullPath = path.join(process.cwd(), out, filename);
+		let fullPath = path.join(process.cwd(), out, filename);
 		result[filename] = computeChecksum(fullPath);
 	});
 	return result;
@@ -135,9 +136,9 @@ function computeChecksums(out, filenames) {
  * @return {string} The checksum for `filename`.
  */
 function computeChecksum(filename) {
-	var contents = fs.readFileSync(filename);
+	let contents = fs.readFileSync(filename);
 
-	var hash = crypto
+	let hash = crypto
 		.createHash('md5')
 		.update(contents)
 		.digest('base64')
@@ -323,6 +324,7 @@ function packageTask(platform, arch, sourceFolderName, destinationFolderName, op
 const buildRoot = path.dirname(root);
 
 const BUILD_TARGETS = [
+	{ platform: 'win32', arch: 'arm64' },
 	{ platform: 'win32', arch: 'ia32' },
 	{ platform: 'win32', arch: 'x64' },
 	{ platform: 'darwin', arch: null, opts: { stats: true } },
@@ -427,7 +429,7 @@ gulp.task('vscode-translations-pull', function () {
 });
 
 gulp.task('vscode-translations-import', function () {
-	var options = minimist(process.argv.slice(2), {
+	let options = minimist(process.argv.slice(2), {
 		string: 'location',
 		default: {
 			location: '../vscode-translations-import'

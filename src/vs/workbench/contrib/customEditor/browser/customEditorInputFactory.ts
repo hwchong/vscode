@@ -3,18 +3,17 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { UnownedDisposable } from 'vs/base/common/lifecycle';
 import { URI } from 'vs/base/common/uri';
 import { generateUuid } from 'vs/base/common/uuid';
 import { IInstantiationService } from 'vs/platform/instantiation/common/instantiation';
-import { CustomFileEditorInput } from 'vs/workbench/contrib/customEditor/browser/customEditorInput';
+import { CustomEditorInput } from 'vs/workbench/contrib/customEditor/browser/customEditorInput';
 import { WebviewEditorInputFactory } from 'vs/workbench/contrib/webview/browser/webviewEditorInputFactory';
 import { IWebviewWorkbenchService } from 'vs/workbench/contrib/webview/browser/webviewWorkbenchService';
 import { Lazy } from 'vs/base/common/lazy';
 
 export class CustomEditorInputFactory extends WebviewEditorInputFactory {
 
-	public static readonly ID = CustomFileEditorInput.typeId;
+	public static readonly ID = CustomEditorInput.typeId;
 
 	public constructor(
 		@IInstantiationService private readonly _instantiationService: IInstantiationService,
@@ -23,10 +22,11 @@ export class CustomEditorInputFactory extends WebviewEditorInputFactory {
 		super(webviewWorkbenchService);
 	}
 
-	public serialize(input: CustomFileEditorInput): string | undefined {
+	public serialize(input: CustomEditorInput): string | undefined {
 		const data = {
 			...this.toJson(input),
-			editorResource: input.getResource().toJSON()
+			editorResource: input.resource.toJSON(),
+			modelType: input.modelType
 		};
 
 		try {
@@ -39,7 +39,7 @@ export class CustomEditorInputFactory extends WebviewEditorInputFactory {
 	public deserialize(
 		_instantiationService: IInstantiationService,
 		serializedEditorInput: string
-	): CustomFileEditorInput {
+	): CustomEditorInput {
 		const data = this.fromJson(serializedEditorInput);
 		const id = data.id || generateUuid();
 
@@ -48,12 +48,15 @@ export class CustomEditorInputFactory extends WebviewEditorInputFactory {
 				location: data.extensionLocation,
 				id: data.extensionId
 			} : undefined, data.group);
-			return new UnownedDisposable(webviewInput.webview);
+			return webviewInput.webview;
 		});
 
-		const customInput = this._instantiationService.createInstance(CustomFileEditorInput, URI.from((data as any).editorResource), data.viewType, id, webview);
+		const customInput = this._instantiationService.createInstance(CustomEditorInput, URI.from((data as any).editorResource), data.viewType, id, webview);
 		if (typeof data.group === 'number') {
 			customInput.updateGroup(data.group);
+		}
+		if ((data as any).modelType) {
+			customInput.modelType = (data as any).modelType;
 		}
 		return customInput;
 	}

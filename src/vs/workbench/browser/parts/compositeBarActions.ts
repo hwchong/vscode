@@ -17,9 +17,11 @@ import { contrastBorder } from 'vs/platform/theme/common/colorRegistry';
 import { DelayedDragHandler } from 'vs/base/browser/dnd';
 import { IActivity } from 'vs/workbench/common/activity';
 import { IKeybindingService } from 'vs/platform/keybinding/common/keybinding';
-import { Event, Emitter } from 'vs/base/common/event';
+import { Emitter } from 'vs/base/common/event';
 import { DragAndDropObserver, LocalSelectionTransfer } from 'vs/workbench/browser/dnd';
 import { Color } from 'vs/base/common/color';
+import { DraggedViewIdentifier } from 'vs/workbench/browser/parts/views/viewPaneContainer';
+import { ICompositeDragAndDrop, CompositeDragAndDropData } from 'vs/base/parts/composite/browser/compositeDnd';
 
 export interface ICompositeActivity {
 	badge: IBadge;
@@ -51,11 +53,11 @@ export interface ICompositeBar {
 
 export class ActivityAction extends Action {
 
-	private readonly _onDidChangeActivity = new Emitter<this>();
-	readonly onDidChangeActivity: Event<this> = this._onDidChangeActivity.event;
+	private readonly _onDidChangeActivity = this._register(new Emitter<ActivityAction>());
+	readonly onDidChangeActivity = this._onDidChangeActivity.event;
 
-	private readonly _onDidChangeBadge = new Emitter<this>();
-	readonly onDidChangeBadge: Event<this> = this._onDidChangeBadge.event;
+	private readonly _onDidChangeBadge = this._register(new Emitter<ActivityAction>());
+	readonly onDidChangeBadge = this._onDidChangeBadge.event;
 
 	private badge: IBadge | undefined;
 	private clazz: string | undefined;
@@ -168,7 +170,7 @@ export class ActivityActionViewItem extends BaseActionViewItem {
 			} else {
 				const foreground = this._action.checked ? colors.activeForegroundColor : colors.inactiveForegroundColor;
 				const borderBottomColor = this._action.checked ? colors.activeBorderBottomColor : null;
-				this.label.style.color = foreground ? foreground.toString() : null;
+				this.label.style.color = foreground ? foreground.toString() : '';
 				this.label.style.borderBottomColor = borderBottomColor ? borderBottomColor.toString() : '';
 			}
 		}
@@ -179,7 +181,7 @@ export class ActivityActionViewItem extends BaseActionViewItem {
 			const badgeBackground = colors.badgeBackground;
 			const contrastBorderColor = theme.getColor(contrastBorder);
 
-			this.badgeContent.style.color = badgeForeground ? badgeForeground.toString() : null;
+			this.badgeContent.style.color = badgeForeground ? badgeForeground.toString() : '';
 			this.badgeContent.style.backgroundColor = badgeBackground ? badgeBackground.toString() : '';
 
 			this.badgeContent.style.borderStyle = contrastBorderColor ? 'solid' : '';
@@ -458,14 +460,16 @@ export class CompositeActionViewItem extends ActivityActionViewItem {
 	private static manageExtensionAction: ManageExtensionAction;
 
 	private compositeActivity: IActivity | undefined;
-	private compositeTransfer: LocalSelectionTransfer<DraggedCompositeIdentifier>;
+	private compositeTransfer: LocalSelectionTransfer<DraggedCompositeIdentifier | DraggedViewIdentifier>;
 
 	constructor(
 		private compositeActivityAction: ActivityAction,
 		private toggleCompositePinnedAction: Action,
+		private compositeContextMenuActionsProvider: (compositeId: string) => ReadonlyArray<Action>,
 		private contextMenuActionsProvider: () => ReadonlyArray<Action>,
 		colors: (theme: ITheme) => ICompositeBarColors,
 		icon: boolean,
+		private dndHandler: ICompositeDragAndDrop,
 		private compositeBar: ICompositeBar,
 		@IContextMenuService private readonly contextMenuService: IContextMenuService,
 		@IKeybindingService private readonly keybindingService: IKeybindingService,
@@ -474,7 +478,7 @@ export class CompositeActionViewItem extends ActivityActionViewItem {
 	) {
 		super(compositeActivityAction, { draggable: true, colors, icon }, themeService);
 
-		this.compositeTransfer = LocalSelectionTransfer.getInstance<DraggedCompositeIdentifier>();
+		this.compositeTransfer = LocalSelectionTransfer.getInstance<DraggedCompositeIdentifier | DraggedViewIdentifier>();
 
 		if (!CompositeActionViewItem.manageExtensionAction) {
 			CompositeActionViewItem.manageExtensionAction = instantiationService.createInstance(ManageExtensionAction);
@@ -540,13 +544,48 @@ export class CompositeActionViewItem extends ActivityActionViewItem {
 				if (this.compositeTransfer.hasData(DraggedCompositeIdentifier.prototype)) {
 					const data = this.compositeTransfer.getData(DraggedCompositeIdentifier.prototype);
 					if (Array.isArray(data) && data[0].id !== this.activity.id) {
-						this.updateFromDragging(container, true);
+						const validDropTarget = this.dndHandler.onDragEnter(new CompositeDragAndDropData('composite', data[0].id), this.activity.id, e);
+						this.updateFromDragging(container, validDropTarget);
+					}
+				}
+
+				if (this.compositeTransfer.hasData(DraggedViewIdentifier.prototype)) {
+					const data = this.compositeTransfer.getData(DraggedViewIdentifier.prototype);
+					if (Array.isArray(data) && data[0].id !== this.activity.id) {
+						const validDropTarget = this.dndHandler.onDragEnter(new CompositeDragAndDropData('view', data[0].id), this.activity.id, e);
+						this.updateFromDragging(container, validDropTarget);
+					}
+				}
+			},
+
+			onDragOver: e => {
+				dom.EventHelper.stop(e, true);
+				if (this.compositeTransfer.hasData(DraggedCompositeIdentifier.prototype)) {
+					const data = this.compositeTransfer.getData(DraggedCompositeIdentifier.prototype);
+					if (Array.isArray(data)) {
+						const draggedCompositeId = data[0].id;
+						if (draggedCompositeId !== this.activity.id) {
+							if (e.dataTransfer && !this.dndHandler.onDragOver(new CompositeDragAndDropData('composite', draggedCompositeId), this.activity.id, e)) {
+								e.dataTransfer.dropEffect = 'none';
+							}
+						}
+					}
+				}
+
+				if (this.compositeTransfer.hasData(DraggedViewIdentifier.prototype)) {
+					const data = this.compositeTransfer.getData(DraggedViewIdentifier.prototype);
+					if (Array.isArray(data)) {
+						const draggedViewId = data[0].id;
+						if (e.dataTransfer && !this.dndHandler.onDragOver(new CompositeDragAndDropData('view', draggedViewId), this.activity.id, e)) {
+							e.dataTransfer.dropEffect = 'none';
+						}
 					}
 				}
 			},
 
 			onDragLeave: e => {
-				if (this.compositeTransfer.hasData(DraggedCompositeIdentifier.prototype)) {
+				if (this.compositeTransfer.hasData(DraggedCompositeIdentifier.prototype) ||
+					this.compositeTransfer.hasData(DraggedViewIdentifier.prototype)) {
 					this.updateFromDragging(container, false);
 				}
 			},
@@ -570,8 +609,19 @@ export class CompositeActionViewItem extends ActivityActionViewItem {
 							this.updateFromDragging(container, false);
 							this.compositeTransfer.clearData(DraggedCompositeIdentifier.prototype);
 
-							this.compositeBar.move(draggedCompositeId, this.activity.id);
+							this.dndHandler.drop(new CompositeDragAndDropData('composite', draggedCompositeId), this.activity.id, e);
 						}
+					}
+				}
+
+				if (this.compositeTransfer.hasData(DraggedViewIdentifier.prototype)) {
+					const data = this.compositeTransfer.getData(DraggedViewIdentifier.prototype);
+					if (Array.isArray(data)) {
+						const draggedViewId = data[0].id;
+						this.updateFromDragging(container, false);
+						this.compositeTransfer.clearData(DraggedViewIdentifier.prototype);
+
+						this.dndHandler.drop(new CompositeDragAndDropData('view', draggedViewId), this.activity.id, e);
 					}
 				}
 			}
@@ -579,7 +629,9 @@ export class CompositeActionViewItem extends ActivityActionViewItem {
 
 		// Activate on drag over to reveal targets
 		[this.badge, this.label].forEach(b => this._register(new DelayedDragHandler(b, () => {
-			if (!this.compositeTransfer.hasData(DraggedCompositeIdentifier.prototype) && !this.getAction().checked) {
+			if (!(this.compositeTransfer.hasData(DraggedCompositeIdentifier.prototype) ||
+				this.compositeTransfer.hasData(DraggedViewIdentifier.prototype)) &&
+				!this.getAction().checked) {
 				this.getAction().run();
 			}
 		})));
@@ -596,6 +648,12 @@ export class CompositeActionViewItem extends ActivityActionViewItem {
 
 	private showContextMenu(container: HTMLElement): void {
 		const actions: Action[] = [this.toggleCompositePinnedAction];
+
+		const compositeContextMenuActions = this.compositeContextMenuActionsProvider(this.activity.id);
+		if (compositeContextMenuActions.length) {
+			actions.push(...compositeContextMenuActions);
+		}
+
 		if ((<any>this.compositeActivityAction.activity).extensionId) {
 			actions.push(new Separator());
 			actions.push(CompositeActionViewItem.manageExtensionAction);

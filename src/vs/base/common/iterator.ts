@@ -125,6 +125,19 @@ export module Iterator {
 		};
 	}
 
+	export function some<T>(iterator: Iterator<T> | NativeIterator<T>, fn: (t: T) => boolean): boolean {
+		while (true) {
+			const element = iterator.next();
+			if (element.done) {
+				return false;
+			}
+
+			if (fn(element.value)) {
+				return true;
+			}
+		}
+	}
+
 	export function forEach<T>(iterator: Iterator<T>, fn: (t: T) => void): void {
 		for (let next = iterator.next(); !next.done; next = iterator.next()) {
 			fn(next.value);
@@ -172,13 +185,28 @@ export module Iterator {
 			}
 		};
 	}
+
+	export function chain<T>(iterator: Iterator<T>): ChainableIterator<T> {
+		return new ChainableIterator(iterator);
+	}
+}
+
+export class ChainableIterator<T> implements Iterator<T> {
+
+	constructor(private it: Iterator<T>) { }
+
+	next(): IteratorResult<T> { return this.it.next(); }
+	map<R>(fn: (t: T) => R): ChainableIterator<R> { return new ChainableIterator(Iterator.map(this.it, fn)); }
+	filter(fn: (t: T) => boolean): ChainableIterator<T> { return new ChainableIterator(Iterator.filter(this.it, fn)); }
 }
 
 export type ISequence<T> = Iterator<T> | T[];
 
-export function getSequenceIterator<T>(arg: Iterator<T> | T[]): Iterator<T> {
+export function getSequenceIterator<T>(arg: ISequence<T> | undefined): Iterator<T> {
 	if (Array.isArray(arg)) {
 		return Iterator.fromArray(arg);
+	} else if (!arg) {
+		return Iterator.empty();
 	} else {
 		return arg;
 	}
@@ -271,7 +299,7 @@ export interface INavigator<T> extends INextIterator<T> {
 
 export class MappedNavigator<T, R> extends MappedIterator<T, R> implements INavigator<R> {
 
-	constructor(protected navigator: INavigator<T>, fn: (item: T) => R) {
+	constructor(protected navigator: INavigator<T>, fn: (item: T | null) => R) {
 		super(navigator, fn);
 	}
 

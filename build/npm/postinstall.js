@@ -13,7 +13,7 @@ const yarn = process.platform === 'win32' ? 'yarn.cmd' : 'yarn';
  * @param {*} [opts]
  */
 function yarnInstall(location, opts) {
-	opts = opts || {};
+	opts = opts || { env: process.env };
 	opts.cwd = location;
 	opts.stdio = 'inherit';
 
@@ -25,17 +25,28 @@ function yarnInstall(location, opts) {
 	console.log(`Installing dependencies in ${location}...`);
 	console.log(`$ yarn ${args.join(' ')}`);
 	const result = cp.spawnSync(yarn, args, opts);
-
 	if (result.error || result.status !== 0) {
 		process.exit(1);
 	}
 }
 
+function remoteOpts() {
+	opts = {};
+	if (process.env["npm_config_arch"] == "arm64") {
+		// Temporarily set remote arch to x86, because the remote portion builds
+		// against node, which is not consistently supported on Windows on Arm
+		// (yet).
+		opts.env = JSON.parse(JSON.stringify(process.env))
+		opts.env["npm_config_arch"] = "ia32"
+	}
+	return opts;
+}
+
 yarnInstall('extensions'); // node modules shared by all extensions
 
-yarnInstall('remote'); // node modules used by vscode server
+yarnInstall('remote', remoteOpts()); // node modules used by vscode server
 
-yarnInstall('remote/web'); // node modules used by vscode web
+yarnInstall('remote/web', remoteOpts()); // node modules used by vscode web
 
 const allExtensionFolders = fs.readdirSync('extensions');
 const extensions = allExtensionFolders.filter(e => {
@@ -52,8 +63,6 @@ extensions.forEach(extension => yarnInstall(`extensions/${extension}`));
 function yarnInstallBuildDependencies() {
 	// make sure we install the deps of build/lib/watch for the system installed
 	// node, since that is the driver of gulp
-	//@ts-ignore
-	const env = Object.assign({}, process.env);
 	const watchPath = path.join(path.dirname(__dirname), 'lib', 'watch');
 	const yarnrcPath = path.join(watchPath, '.yarnrc');
 
@@ -66,10 +75,11 @@ target "${target}"
 runtime "${runtime}"`;
 
 	fs.writeFileSync(yarnrcPath, yarnrc, 'utf8');
-	yarnInstall(watchPath, { env });
+	yarnInstall(watchPath);
 }
 
 yarnInstall(`build`); // node modules required for build
 yarnInstall('test/automation'); // node modules required for smoketest
 yarnInstall('test/smoke'); // node modules required for smoketest
+yarnInstall('test/integration/browser'); // node modules required for integration
 yarnInstallBuildDependencies(); // node modules for watching, specific to host node version, not electron

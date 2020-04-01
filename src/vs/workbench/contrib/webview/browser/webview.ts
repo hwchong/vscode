@@ -12,6 +12,7 @@ import * as nls from 'vs/nls';
 import { RawContextKey } from 'vs/platform/contextkey/common/contextkey';
 import { ExtensionIdentifier } from 'vs/platform/extensions/common/extensions';
 import { createDecorator } from 'vs/platform/instantiation/common/instantiation';
+import { IMouseWheelEvent } from 'vs/base/browser/mouseEvent';
 
 /**
  * Set when the find widget in a webview is visible.
@@ -23,6 +24,11 @@ export const webviewHasOwnEditFunctionsContextKey = 'webviewHasOwnEditFunctions'
 export const webviewHasOwnEditFunctionsContext = new RawContextKey<boolean>(webviewHasOwnEditFunctionsContextKey, false);
 
 export const IWebviewService = createDecorator<IWebviewService>('webviewService');
+
+export interface WebviewIcons {
+	readonly light: URI;
+	readonly dark: URI;
+}
 
 /**
  * Handles the creation of webview elements.
@@ -41,6 +47,8 @@ export interface IWebviewService {
 		options: WebviewOptions,
 		contentOptions: WebviewContentOptions,
 	): WebviewEditorOverlay;
+
+	setIcons(id: string, value: WebviewIcons | undefined): void;
 }
 
 export interface WebviewOptions {
@@ -71,8 +79,9 @@ export interface Webview extends IDisposable {
 	state: string | undefined;
 
 	readonly onDidFocus: Event<void>;
-	readonly onDidClickLink: Event<URI>;
+	readonly onDidClickLink: Event<string>;
 	readonly onDidScroll: Event<{ scrollYPercentage: number }>;
+	readonly onDidWheel: Event<IMouseWheelEvent>;
 	readonly onDidUpdateState: Event<string | undefined>;
 	readonly onMessage: Event<any>;
 	readonly onMissingCsp: Event<ExtensionIdentifier>;
@@ -85,6 +94,8 @@ export interface Webview extends IDisposable {
 	showFind(): void;
 	hideFind(): void;
 	runFindAction(previous: boolean): void;
+
+	selectAll(): void;
 
 	windowDidDragStart(): void;
 	windowDidDragEnd(): void;

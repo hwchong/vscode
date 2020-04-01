@@ -25,6 +25,7 @@ const cp = require('child_process');
 const REPO_ROOT = path.dirname(__dirname);
 
 const BUILD_TARGETS = [
+	{ platform: 'win32', arch: 'arm64', pkgTarget: 'node8-win-arm64' },
 	{ platform: 'win32', arch: 'ia32', pkgTarget: 'node8-win-x86' },
 	{ platform: 'win32', arch: 'x64', pkgTarget: 'node8-win-x64' },
 	{ platform: 'darwin', arch: null, pkgTarget: 'node8-macos-x64' },
@@ -118,7 +119,7 @@ function mixinServer(watch) {
 	const packageJSONPath = path.join(path.dirname(__dirname), 'package.json');
 	function exec(cmdLine) {
 		console.log(cmdLine);
-		cp.execSync(cmdLine, { stdio: "inherit" });
+		cp.execSync(cmdLine, { stdio: 'inherit' });
 	}
 	function checkout() {
 		const packageJSON = JSON.parse(fs.readFileSync(packageJSONPath).toString());

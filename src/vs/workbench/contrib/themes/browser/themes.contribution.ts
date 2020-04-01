@@ -11,7 +11,7 @@ import { SyncActionDescriptor, MenuRegistry, MenuId } from 'vs/platform/actions/
 import { Registry } from 'vs/platform/registry/common/platform';
 import { IWorkbenchActionRegistry, Extensions } from 'vs/workbench/common/actions';
 import { IWorkbenchThemeService, COLOR_THEME_SETTING, ICON_THEME_SETTING, IColorTheme, IFileIconTheme } from 'vs/workbench/services/themes/common/workbenchThemeService';
-import { VIEWLET_ID, IExtensionsViewlet } from 'vs/workbench/contrib/extensions/common/extensions';
+import { VIEWLET_ID, IExtensionsViewPaneContainer } from 'vs/workbench/contrib/extensions/common/extensions';
 import { IExtensionGalleryService } from 'vs/platform/extensionManagement/common/extensionManagement';
 import { IViewletService } from 'vs/workbench/services/viewlet/browser/viewlet';
 import { IColorRegistry, Extensions as ColorRegistryExtensions } from 'vs/platform/theme/common/colorRegistry';
@@ -63,7 +63,7 @@ export class SelectColorThemeAction extends Action {
 					let target: ConfigurationTarget | undefined = undefined;
 					if (applyTheme) {
 						const confValue = this.configurationService.inspect(COLOR_THEME_SETTING);
-						target = typeof confValue.workspace !== 'undefined' ? ConfigurationTarget.WORKSPACE : ConfigurationTarget.USER;
+						target = typeof confValue.workspaceValue !== 'undefined' ? ConfigurationTarget.WORKSPACE : ConfigurationTarget.USER;
 					}
 
 					this.themeService.setColorTheme(themeId, target).then(undefined,
@@ -148,7 +148,7 @@ class SelectIconThemeAction extends Action {
 					let target: ConfigurationTarget | undefined = undefined;
 					if (applyTheme) {
 						const confValue = this.configurationService.inspect(ICON_THEME_SETTING);
-						target = typeof confValue.workspace !== 'undefined' ? ConfigurationTarget.WORKSPACE : ConfigurationTarget.USER;
+						target = typeof confValue.workspaceValue !== 'undefined' ? ConfigurationTarget.WORKSPACE : ConfigurationTarget.USER;
 					}
 					this.themeService.setFileIconTheme(themeId, target).then(undefined,
 						err => {
@@ -211,7 +211,7 @@ function configurationEntries(extensionGalleryService: IExtensionGalleryService,
 function openExtensionViewlet(viewletService: IViewletService, query: string) {
 	return viewletService.openViewlet(VIEWLET_ID, true).then(viewlet => {
 		if (viewlet) {
-			(viewlet as IExtensionsViewlet).search(query);
+			(viewlet?.getViewPaneContainer() as IExtensionsViewPaneContainer).search(query);
 			viewlet.focus();
 		}
 	});
@@ -228,7 +228,7 @@ function isItem(i: QuickPickInput<ThemeItem>): i is ThemeItem {
 }
 
 function toEntries(themes: Array<IColorTheme | IFileIconTheme>, label?: string): QuickPickInput<ThemeItem>[] {
-	const toEntry = (theme: IColorTheme): ThemeItem => ({ id: theme.id, label: theme.label, description: theme.description });
+	const toEntry = (theme: IColorTheme | IFileIconTheme): ThemeItem => ({ id: theme.id, label: theme.label, description: theme.description });
 	const sorter = (t1: ThemeItem, t2: ThemeItem) => t1.label.localeCompare(t2.label);
 	let entries: QuickPickInput<ThemeItem>[] = themes.map(toEntry).sort(sorter);
 	if (entries.length > 0 && label) {
